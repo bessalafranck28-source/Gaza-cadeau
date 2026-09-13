@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Puzzle Molly</title>
+<style>
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  font-family: Arial, sans-serif;
+  background: #e8f5e9;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#app { height: 100%; display: flex; flex-direction: column; }
+
+/* Écrans */
+.page { display: none; height: 100%; flex-direction: column; }
+.page.active { display: flex; }
+
+/* Accueil */
+#home { align-items: center; justify-content: center; text-align: center; padding: 20px; }
+#home h1 { color: #1b5e20; font-size: 2.2rem; margin-bottom: 10px; }
+#home button { margin-top: 20px; padding: 14px 36px; font-size: 1.2rem; border: none; border-radius: 40px; background: #2e7d32; color: white; font-weight: bold; }
+
+/* Header */
+#header {
+  height: 48px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px; background: white;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+#header span { font-weight: bold; color: #1b5e20; font-size: 1.1rem; }
+#header button { padding: 6px 14px; border: none; border-radius: 20px; background: #e8f5e9; color: #1b5e20; font-weight: 600; }
+
+/* Zone jeu = 70% tableau + 30% pièces */
+#game-area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* Tableau */
+#board-zone {
+  flex: 1; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: #f1f8e9; min-height: 0;
+}
+#ref {
+  position: absolute; top: 8px; left: 8px; z-index: 10;
+  background: white; padding: 3px; border-radius: 8px;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.3);
+}
+#ref img { width: 68px; display: block; border-radius: 6px; }
+#board {
+  background: white; border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+#board canvas { display: block; border-radius: 12px; }
+
+/* Plateau des pièces - hauteur fixe 150px */
+#pieces-zone {
+  height: 26%;
+  min-height: 140px;
+  flex-shrink: 0;
+  background: #fff3e0;
+  border-top: 4px solid #ff9800;
+  display: flex;
+  align-items: flex-end;
+  padding: 4px 6px;
+  gap: 6px;
+  overflow: hidden;
+}
+#leftGroups, #rightGroups { flex: 1 1 50%; min-width: 0; }
+.group {
+  background: white;
+  border: 2px solid #ff9800;
+  border-radius: 10px;
+  padding: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 60px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+}
+.piece {
+  width: 54px; height: 54px; border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  touch-action: none; display: block; background: #ddd;
+}
+.piece.drag {
+  position: fixed !important; z-index: 1000;
+  opacity: 0.9; pointer-events: none;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+}
+
+/* Victoire */
+#win {
+  position: absolute; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.45);
+  display: none; align-items: center; justify-content: center;
+}
+#win.show { display: flex; }
+#win .box {
+  background: white; border-radius: 18px; padding: 20px;
+  text-align: center; max-width: 90%;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+}
+#win img { max-width: 100%; max-height: 35vh; border-radius: 10px; margin-bottom: 12px; }
+#win h2 { color: #1b5e20; margin: 0 0 6px; }
+#win p { color: #555; margin: 0 0 14px; }
+#win .btns { display: flex; gap: 10px; justify-content: center; }
+#win button { padding: 10px 22px; border: none; border-radius: 30px; font-weight: 600; font-size: 1rem; }
+#win .again { background: #eee; color: #333; }
+#win .next { background: #2e7d32; color: white; }
+
+#end { align-items: center; justify-content: center; text-align: center; }
+#end h1 { color: #1b5e20; }
+#end button { margin-top: 20px; padding: 14px 36px; border: none; border-radius: 40px; background: #2e7d32; color: white; font-size: 1.1rem; font-weight: bold; }
+</style>
+</head>
+<body>
+<audio id="music" src="B.mp3" loop></audio>
+<div id="app">
+
+  <!-- Accueil -->
+  <div id="home" class="page active">
+    <h1>🧩 Puzzle pour la fille que j'aime ❤️Molly</h1>
+    <p>J'ai conçu ce jeu uniquement pour toi❤️🥰</p>
+    <button id="btnStart">Commencer</button>
+    <p style="margin-top:30px;font-size:0.9rem;color:#666">Je t'aime ❤️<br>+ I love you❤️</p>
+  </div>
+
+  <!-- Jeu -->
+  <div id="game" class="page">
+    <div id="header">
+      <span>Niveau <span id="levelNum">1</span> / 11</span>
+      <button id="btnMix">Mélanger</button>
+    </div>
+    <div id="game-area">
+      <div id="board-zone">
+        <div id="ref"><img id="refImg" alt="Référence"></div>
+        <div id="board"><canvas id="canvas"></canvas></div>
+      </div>
+      <div id="pieces-zone">
+        <div id="leftGroups" style="display:flex;flex-direction:column;gap:4px;"></div>
+        <div id="rightGroups" style="display:flex;flex-direction:column;"></div>
+      </div>
+    </div>
+    <div id="win">
+      <div class="box">
+        <img id="winImg">
+        <h2>🎉 Bravo !</h2>
+        <p>Niveau <span id="winLevel">1</span> terminé</p>
+        <div class="btns">
+          <button class="again" id="btnAgain">Recommencer</button>
+          <button class="next" id="btnNext">Continuer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fin -->
+  <div id="end" class="page">
+    <h1>🏆 Félicitations !</h1>
+    <p>Tu as terminé les 11 niveaux</p>
+    <button id="btnReplay">Rejouer</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const TOTAL = 11;
+  let level = 0, pieces = [], bw, bh, pw, ph, img, finished = false, drag = null;
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const leftG = document.getElementById('leftGroups');
+  const rightG = document.getElementById('rightGroups');
+
+  function show(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function loadLevel(n) {
+    finished = false;
+    document.getElementById('win').classList.remove('show');
+    leftG.innerHTML = '';
+    rightG.innerHTML = '';
+    pieces = [];
+    level = n;
+    document.getElementById('levelNum').textContent = n + 1;
+
+    img = new Image();
+    img.onload = function() {
+      // Référence fixe
+      document.getElementById('refImg').src = img.src;
+
+      const zone = document.getElementById('board-zone');
+      const maxW = zone.clientWidth - 24;
+      const maxH = zone.clientHeight - 24;
+      let size = Math.min(Math.floor(maxW / 3), Math.floor(maxH / 3));
+      size = Math.max(40, Math.min(size, 130));
+      pw = size; ph = size;
+
+      const ratio = img.naturalWidth / img.naturalHeight;
+      if (ratio > 1) {
+        bw = pw * 3;
+        bh = Math.round(bw / ratio);
+        ph = Math.floor(bh / 3);
+      } else {
+        bh = ph * 3;
+        bw = Math.round(bh * ratio);
+        pw = Math.floor(bw / 3);
+      }
+
+      canvas.width = bw;
+      canvas.height = bh;
+      const boardEl = document.getElementById('board');
+      boardEl.style.width = bw + 'px';
+      boardEl.style.height = bh + 'px';
+
+      // S'assurer que le plateau ne touche jamais la référence (haut-gauche)
+      const refEl = document.getElementById('ref');
+      const naturalTop = (zone.clientHeight - bh) / 2;
+      const neededTop = refEl.offsetHeight + 10;
+      boardEl.style.marginTop = naturalTop < neededTop ? (neededTop - naturalTop) + 'px' : '0px';
+
+      drawBoard();
+
+      // Créer 9 pièces
+      const list = [];
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          const cnv = document.createElement('canvas');
+          cnv.width = pw;
+          cnv.height = ph;
+          const cctx = cnv.getContext('2d');
+          cctx.drawImage(img,
+            c / 3 * img.naturalWidth, r / 3 * img.naturalHeight,
+            img.naturalWidth / 3, img.naturalHeight / 3,
+            0, 0, pw, ph);
+          cctx.strokeStyle = 'rgba(0,0,0,0.4)';
+          cctx.lineWidth = 2;
+          cctx.strokeRect(0, 0, pw, ph);
+
+          cnv.className = 'piece';
+          cnv.style.width = '54px';
+          cnv.style.height = '54px';
+
+          const piece = {
+            id: r * 3 + c,
+            row: r, col: c,
+            correctX: c * pw,
+            correctY: r * ph,
+            el: cnv,
+            placed: false
+          };
+          list.push(piece);
+          pieces.push(piece);
+        }
+      }
+
+      // Mélanger
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+
+      // 2 groupes à gauche, 1 à droite
+      function makeGroup(arr) {
+        const div = document.createElement('div');
+        div.className = 'group';
+        arr.forEach(p => {
+          div.appendChild(p.el);
+          p.el.addEventListener('touchstart', onDown, { passive: false });
+          p.el.addEventListener('mousedown', onDown);
+        });
+        return div;
+      }
+
+      leftG.appendChild(makeGroup(list.slice(0, 3)));
+      leftG.appendChild(makeGroup(list.slice(3, 6)));
+      rightG.appendChild(makeGroup(list.slice(6, 9)));
+    };
+    img.onerror = function() {
+      alert('Image introuvable : molly' + (n + 1) + '.jpg\nMets les images à côté du fichier HTML');
+    };
+    img.src = 'molly' + (n + 1) + '.jpg';
+  }
+
+  function drawBoard() {
+    ctx.clearRect(0, 0, bw, bh);
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(0, 0, bw, bh);
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    ctx.lineWidth = 1.5;
+    for (let i = 1; i < 3; i++) {
+      ctx.beginPath(); ctx.moveTo(i * pw, 0); ctx.lineTo(i * pw, bh); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * ph); ctx.lineTo(bw, i * ph); ctx.stroke();
+    }
+    pieces.filter(p => p.placed).forEach(p => {
+      ctx.drawImage(p.el, p.correctX, p.correctY, pw, ph);
+    });
+  }
+
+  function getPos(e) {
+    if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    if (e.changedTouches && e.changedTouches[0]) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    return { x: e.clientX, y: e.clientY };
+  }
+
+  function onDown(e) {
+    if (finished) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const el = e.currentTarget;
+    const piece = pieces.find(p => p.el === el);
+    if (!piece || piece.placed) return;
+
+    const pos = getPos(e);
+    const rect = el.getBoundingClientRect();
+    drag = { piece, ox: pos.x - rect.left, oy: pos.y - rect.top };
+
+    el.classList.add('drag');
+    el.style.left = rect.left + 'px';
+    el.style.top = rect.top + 'px';
+    el.style.width = pw + 'px';
+    el.style.height = ph + 'px';
+    document.body.appendChild(el);
+
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchend', onUp);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchcancel', onUp);
+  }
+
+  function onMove(e) {
+    if (!drag) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    drag.piece.el.style.left = (pos.x - drag.ox) + 'px';
+    drag.piece.el.style.top = (pos.y - drag.oy) + 'px';
+  }
+
+  function onUp(e) {
+    if (!drag) return;
+    const pos = getPos(e);
+    const piece = drag.piece;
+    const el = piece.el;
+
+    window.removeEventListener('touchmove', onMove);
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('touchend', onUp);
+    window.removeEventListener('mouseup', onUp);
+    window.removeEventListener('touchcancel', onUp);
+    el.classList.remove('drag');
+
+    const boardRect = canvas.getBoundingClientRect();
+    const cx = pos.x - drag.ox + pw / 2 - boardRect.left;
+    const cy = pos.y - drag.oy + ph / 2 - boardRect.top;
+    const tx = piece.col * pw + pw / 2;
+    const ty = piece.row * ph + ph / 2;
+
+    if (Math.abs(cx - tx) < pw * 0.7 && Math.abs(cy - ty) < ph * 0.7) {
+      piece.placed = true;
+      el.style.display = 'none';
+      drawBoard();
+      if (pieces.every(p => p.placed)) {
+        setTimeout(showWin, 300);
+      }
+    } else {
+      el.style.position = '';
+      el.style.left = '';
+      el.style.top = '';
+      el.style.width = '54px';
+      el.style.height = '54px';
+      // remettre dans un groupe
+      const groups = document.querySelectorAll('.group');
+      let put = false;
+      for (const g of groups) {
+        if (g.children.length < 3) {
+          g.appendChild(el);
+          put = true;
+          break;
+        }
+      }
+      if (!put && groups[0]) groups[0].appendChild(el);
+    }
+    drag = null;
+  }
+
+  function showWin() {
+    finished = true;
+    document.getElementById('winImg').src = img.src;
+    document.getElementById('winLevel').textContent = level + 1;
+    document.getElementById('win').classList.add('show');
+    document.getElementById('btnNext').textContent = level >= TOTAL - 1 ? 'Terminer' : 'Continuer';
+  }
+
+  document.getElementById('btnStart').onclick = function() {
+    show('game');
+    const m = document.getElementById('music');
+    m.volume = 0.4;
+    m.play().catch(function(){});
+    loadLevel(0);
+  };
+
+  document.getElementById('btnMix').onclick = function() {
+    if (finished) return;
+    const free = pieces.filter(p => !p.placed);
+    free.forEach(p => {
+      p.el.style.display = '';
+      p.el.style.position = '';
+      p.el.style.left = '';
+      p.el.style.top = '';
+      p.el.style.width = '54px';
+      p.el.style.height = '54px';
+    });
+    for (let i = free.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [free[i], free[j]] = [free[j], free[i]];
+    }
+    leftG.innerHTML = '';
+    rightG.innerHTML = '';
+    function makeGroup(arr) {
+      const div = document.createElement('div');
+      div.className = 'group';
+      arr.forEach(p => {
+        div.appendChild(p.el);
+        p.el.addEventListener('touchstart', onDown, { passive: false });
+        p.el.addEventListener('mousedown', onDown);
+      });
+      return div;
+    }
+    if (free.length > 0) leftG.appendChild(makeGroup(free.slice(0, Math.min(3, free.length))));
+    if (free.length > 3) leftG.appendChild(makeGroup(free.slice(3, Math.min(6, free.length))));
+    if (free.length > 6) rightG.appendChild(makeGroup(free.slice(6)));
+  };
+
+  document.getElementById('btnAgain').onclick = function() {
+    document.getElementById('win').classList.remove('show');
+    loadLevel(level);
+  };
+
+  document.getElementById('btnNext').onclick = function() {
+    document.getElementById('win').classList.remove('show');
+    if (level >= TOTAL - 1) {
+      show('end');
+    } else {
+      loadLevel(level + 1);
+    }
+  };
+
+  document.getElementById('btnReplay').onclick = function() {
+    show('game');
+    loadLevel(0);
+  };
+
+  document.addEventListener('touchmove', function(e) {
+    if (drag) e.preventDefault();
+  }, { passive: false });
+})();
+</script>
+</body>
+</html>
